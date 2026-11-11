@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="ru" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Учет Звук и Свет — Mini App</title>
+    <!-- Telegram Web App API -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        tg: {
+                            bg: 'var(--tg-theme-bg-color, #0f172a)',
+                            card: 'var(--tg-theme-secondary-bg-color, #1e293b)',
+                            text: 'var(--tg-theme-text-color, #f8fafc)',
+                            hint: 'var(--tg-theme-hint-color, #94a3b8)',
+                            button: 'var(--tg-theme-button-color, #3b82f6)',
+                            buttonText: 'var(--tg-theme-button-text-color, #ffffff)',
+                            accent: '#6366f1',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.02);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        .equipment-card.selected {
+            border-color: #3b82f6;
+            background-color: rgba(59, 130, 246, 0.15);
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col antialiased selection:bg-blue-500 selection:text-white">
+
+    <!-- Top Header -->
+    <header class="sticky top-0 z-40 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20 text-white font-bold">
+                <i class="fa-solid fa-sliders text-sm"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-sm leading-tight text-slate-100">Звук & Свет Учет</h1>
+                <p class="text-xs text-slate-400" id="current-date-header">Загрузка...</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2">
+            <button onclick="app.openNewOrderModal()" class="bg-blue-600 hover:bg-blue-500 active:scale-95 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-md shadow-blue-600/30 transition-all flex items-center space-x-1.5">
+                <i class="fa-solid fa-plus"></i>
+                <span>Заказ</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 overflow-y-auto pb-24 px-4 pt-4 max-w-xl w-full mx-auto">
+        
+        <!-- Tab 1: Calendar & Overview -->
+        <div id="tab-calendar" class="space-y-4 tab-content">
+            <!-- Stats overview cards -->
+            <div class="grid grid-cols-2 gap-3">
+                <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-3.5 backdrop-blur-sm">
+                    <div class="text-slate-400 text-xs font-medium flex items-center justify-between">
+                        <span>Заказы в месяце</span>
+                        <i class="fa-solid fa-calendar-days text-blue-400"></i>
+                    </div>
+                    <div class="text-2xl font-bold mt-1.5 text-slate-100" id="stat-month-count">0</div>
+                    <div class="text-[10px] text-slate-500 mt-1">активных броней</div>
+                </div>
+                <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-3.5 backdrop-blur-sm">
+                    <div class="text-slate-400 text-xs font-medium flex items-center justify-between">
+                        <span>Сумма месяца</span>
+                        <i class="fa-solid fa-wallet text-emerald-400"></i>
+                    </div>
+                    <div class="text-2xl font-bold mt-1.5 text-emerald-400" id="stat-month-sum">0 ₽</div>
+                    <div class="text-[10px] text-slate-500 mt-1">оборот за период</div>
+                </div>
+            </div>
+
+            <!-- Calendar Widget -->
+            <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="font-bold text-base text-slate-200 capitalize" id="calendar-month-title">Загрузка...</h2>
+                    <div class="flex items-center space-x-1 bg-slate-900/60 p-1 rounded-xl border border-slate-700/60">
+                        <button onclick="app.prevMonth()" class="w-8 h-8 rounded-lg hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors">
+                            <i class="fa-solid fa-chevron-left text-xs"></i>
+                        </button>
+                        <button onclick="app.currentMonth()" class="px-2.5 py-1 text-xs font-medium text-slate-300 hover:text-white">Сегодня</button>
+                        <button onclick="app.nextMonth()" class="w-8 h-8 rounded-lg hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors">
+                            <i class="fa-solid fa-chevron-right text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Weekday Headers -->
+                <div class="grid grid-cols-7 gap-1 text-center mb-2">
+                    <span class="text-[11px] font-semibold text-slate-400">Пн</span>
+                    <span class="text-[11px] font-semibold text-slate-400">Вт</span>
+                    <span class="text-[11px] font-semibold text-slate-400">Ср</span>
+                    <span class="text-[11px] font-semibold text-slate-400">Чт</span>
+                    <span class="text-[11px] font-semibold text-slate-400">Пт</span>
+                    <span class="text-[11px] font-semibold text-slate-400 text-blue-400">Сб</span>
+                    <span class="text-[11px] font-semibold text-slate-400 text-blue-400">Вс</span>
+                </div>
+
+                <!-- Days Grid -->
+                <div id="calendar-grid" class="grid grid-cols-7 gap-1.5">
+                    <!-- Dynamic Days -->
+                </div>
+            </div>
+
+            <!-- Selected Date Bookings list -->
+            <div class="space-y-3">
+                <div class="flex items-center justify-between px-1">
+                    <h3 class="font-semibold text-sm text-slate-300" id="selected-date-title">Заказы на выбранную дату</h3>
+                    <button onclick="app.openNewOrderModalWithDate()" class="text-xs text-blue-400 font-medium hover:underline">+ Добавить на дату</button>
+                </div>
+                <div id="selected-date-orders" class="space-y-2.5">
+                    <!-- Dynamic Selected Date Orders -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 2: Orders List -->
+        <div id="tab-orders" class="space-y-3 hidden tab-content">
+            <div class="flex items-center justify-between bg-slate-800/50 p-2.5 rounded-2xl border border-slate-700/60">
+                <div class="relative flex-1 mr-2">
+                    <i class="fa-solid fa-search absolute left-3 top-3 text-xs text-slate-400"></i>
+                    <input type="text" id="search-input" oninput="app.filterOrders()" placeholder="Поиск..." class="w-full bg-slate-900/80 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500">
+                </div>
+                <select id="filter-status" onchange="app.filterOrders()" class="bg-slate-900/80 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
+                    <option value="all">Все заказы</option>
+                    <option value="upcoming">Предстоящие</option>
+                    <option value="past">Прошедшие</option>
+                </select>
+            </div>
+
+            <div id="all-orders-list" class="space-y-2.5">
+                <!-- Dynamic Orders List -->
+            </div>
+        </div>
+
+        <!-- Tab 3: Equipment Catalog -->
+        <div id="tab-equipment" class="space-y-3 hidden tab-content">
+            <div class="flex items-center justify-between px-1">
+                <h3 class="font-semibold text-sm text-slate-300">Каталог оборудования</h3>
+                <span class="text-xs text-slate-400" id="equipment-count">0 позиций</span>
+            </div>
+            <div class="grid grid-cols-2 gap-3" id="equipment-catalog-grid">
+                <!-- Dynamic catalog -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur-lg border-t border-slate-800 py-2 px-6 flex justify-around items-center z-40 max-w-xl mx-auto">
+        <button onclick="app.switchTab('calendar')" id="nav-btn-calendar" class="flex flex-col items-center space-y-1 text-blue-500 transition-colors">
+            <i class="fa-solid fa-calendar-days text-lg"></i>
+            <span class="text-[10px] font-medium">Календарь</span>
+        </button>
+        <button onclick="app.switchTab('orders')" id="nav-btn-orders" class="flex flex-col items-center space-y-1 text-slate-400 hover:text-slate-200 transition-colors">
+            <i class="fa-solid fa-clipboard-list text-lg"></i>
+            <span class="text-[10px] font-medium">Заказы</span>
+        </button>
+        <button onclick="app.switchTab('equipment')" id="nav-btn-equipment" class="flex flex-col items-center space-y-1 text-slate-400 hover:text-slate-200 transition-colors">
+            <i class="fa-solid fa-boxes-stacked text-lg"></i>
+            <span class="text-[10px] font-medium">Оборудование</span>
+        </button>
+    </nav>
+
+    <!-- Modal: New/Edit Order -->
+    <div id="order-modal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-end sm:items-center justify-center p-0 sm:p-4 transition-all">
+        <div class="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl p-5 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-base text-slate-100" id="modal-title">Новый заказ</h3>
+                <button onclick="app.closeModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="order-form" onsubmit="app.saveOrder(event)" class="space-y-4">
+                <input type="hidden" id="order-id">
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Дата заказа *</label>
+                        <input type="date" id="order-date" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Имя клиента / Контакт *</label>
+                        <input type="text" id="order-client" required placeholder="Напр. Литкина Анна" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1.5">Выберите оборудование и услуги</label>
+                    <div class="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1 bg-slate-950/40 rounded-xl border border-slate-800" id="equipment-select-grid">
+                        <!-- Equipment checkboxes with images -->
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Доставка (₽)</label>
+                        <input type="number" id="order-delivery" value="0" min="0" oninput="app.calcTotal()" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Общая сумма (₽) *</label>
+                        <input type="number" id="order-total" required min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-emerald-400 font-bold text-slate-100 focus:outline-none focus:border-blue-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1">Дополнительные комментарии</label>
+                    <textarea id="order-comment" rows="2" placeholder="Разогрев, тайминг, пожелания по свету..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500"></textarea>
+                </div>
+
+                <div class="pt-2 flex space-x-2">
+                    <button type="button" onclick="app.closeModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-3 rounded-xl text-xs font-semibold transition-colors">Отмена</button>
+                    <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white py-3 rounded-xl text-xs font-semibold shadow-lg shadow-blue-600/30 transition-all">Сохранить заказ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-slate-800 border border-slate-700 text-white px-4 py-2.5 rounded-xl shadow-2xl text-xs flex items-center space-x-2 opacity-0 pointer-events-none transition-opacity duration-300">
+        <i class="fa-solid fa-circle-check text-emerald-400 text-sm"></i>
+        <span id="toast-text">Успешно сохранено!</span>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        // Ссылка на красивую заглушку, если картинки еще не добавлены
+        const FALLBACK_IMG = "https://placehold.co/150x150/1e293b/3b82f6?text=Фото+в+папку";
+
+        // КАТАЛОГ С ЛОКАЛЬНЫМИ КАРТИНКАМИ (1.jpg, 2.jpg и т.д.)
+        const EQUIPMENT_CATALOG = [
+            // Sound
+            { id: 'sound_craft', name: 'Микшер Soundcraft EPM 8', img: '1.jpg', category: 'sound' },
+            { id: 'yamaha_mg', name: 'Микшер Yamaha MG10XU', img: '2.jpg', category: 'sound' },
+            { id: 'behringer_flow', name: 'Микшер Behringer FLOW 8', img: '3.jpg', category: 'sound' },
+            { id: 'shure_sm58', name: 'Микрофон Shure BLX288E/SM58', img: '4.jpg', category: 'sound' },
+            { id: 'shure_mx53', name: 'Микрофоны Shure BLX188E/MX53', img: '5.jpg', category: 'sound' },
+            { id: 'shure_beta', name: 'Микрофоны Shure Beta 58A', img: '6.jpg', category: 'sound' },
+            { id: 'turbosound', name: 'Колонки Turbosound M12', img: '7.jpg', category: 'sound' },
+            { id: 'mackie', name: 'Колонки Mackie Thrash 215', img: '8.jpg', category: 'sound' },
+            { id: 'soundking_sub', name: 'Сабвуфер Soundking KA15SA', img: '9.jpg', category: 'sound' },
+            // Light
+            { id: 'beam_200', name: 'Beam 200вт', img: '10.jpg', category: 'light' },
+            { id: 'beam_120', name: 'Beam 120вт', img: '11.jpg', category: 'light' },
+            { id: 'wash_36', name: 'Wash 36x18', img: '12.jpg', category: 'light' },
+            { id: 'par_18', name: 'PAR 18x18', img: '13.jpg', category: 'light' },
+            { id: 'bar_24', name: 'Bar 24x3', img: '14.jpg', category: 'light' },
+            // Video
+            { id: 'tv_xiaomi', name: 'Телевизор Xiaomi 55', img: '15.jpg', category: 'video' }
+        ];
+
+        const RENTAL_PACKAGES = [
+            {
+                id: 'pkg_1',
+                name: 'Пакет стандартный звук',
+                desc: '2 колонки Turbosound, микшер Behringer FLOW 8, 2 радиомикрофона',
+                items: [{id: 'turbosound', qty: 2}, {id: 'behringer_flow', qty: 1}, {id: 'shure_sm58', qty: 2}]
+            },
+            {
+                id: 'pkg_2',
+                name: 'Пакет стандарт звук/свет',
+                desc: 'Звук стандарт + 2 Wash 36x18, 2 Beam 200вт',
+                items: [{id: 'turbosound', qty: 2}, {id: 'behringer_flow', qty: 1}, {id: 'shure_sm58', qty: 2}, {id: 'wash_36', qty: 2}, {id: 'beam_200', qty: 2}]
+            }
+        ];
+
+        class RentalApp {
+            constructor() {
+                this.orders = JSON.parse(localStorage.getItem('sound_light_orders')) || [];
+                this.currentDate = new Date();
+                this.selectedDateStr = this.formatDateISO(new Date());
+                this.activeTab = 'calendar';
+                this.init();
+            }
+
+            init() {
+                this.updateHeaderDate();
+                this.renderCalendar();
+                this.renderSelectedDateOrders();
+                this.renderOrdersList();
+                this.renderEquipmentCatalog();
+                this.renderEquipmentCheckboxes();
+                this.updateStats();
+            }
+
+            formatDateISO(date) {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
+
+            updateHeaderDate() {
+                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                document.getElementById('current-date-header').textContent = new Date().toLocaleDateString('ru-RU', options);
+            }
+
+            switchTab(tabName) {
+                this.activeTab = tabName;
+                document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+                document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+
+                ['calendar', 'orders', 'equipment'].forEach(t => {
+                    const btn = document.getElementById(`nav-btn-${t}`);
+                    if (t === tabName) {
+                        btn.className = 'flex flex-col items-center space-y-1 text-blue-500 transition-colors';
+                    } else {
+                        btn.className = 'flex flex-col items-center space-y-1 text-slate-400 hover:text-slate-200 transition-colors';
+                    }
+                });
+            }
+
+            // Calendar Logic
+            prevMonth() {
+                this.currentDate.setMonth(this.currentDate.getMonth() - 1);
+                this.renderCalendar();
+            }
+
+            nextMonth() {
+                this.currentDate.setMonth(this.currentDate.getMonth() + 1);
+                this.renderCalendar();
+            }
+
+            currentMonth() {
+                this.currentDate = new Date();
+                this.renderCalendar();
+            }
+
+            renderCalendar() {
+                const year = this.currentDate.getFullYear();
+                const month = this.currentDate.getMonth();
+                
+                const monthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+                document.getElementById('calendar-month-title').textContent = `${monthNames[month]} ${year}`;
+
+                let firstDayIndex = new Date(year, month, 1).getDay() - 1;
+                if (firstDayIndex === -1) firstDayIndex = 6;
+                const totalDays = new Date(year, month + 1, 0).getDate();
+                
+                const grid = document.getElementById('calendar-grid');
+                grid.innerHTML = '';
+
+                for (let i = 0; i < firstDayIndex; i++) {
+                    const emptyDiv = document.createElement('div');
+                    emptyDiv.className = 'h-10 rounded-xl bg-slate-900/20 opacity-30';
+                    grid.appendChild(emptyDiv);
+                }
+
+                for (let day = 1; day <= totalDays; day++) {
+                    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    const dayOrders = this.orders.filter(o => o.date === dateStr);
+                    const isSelected = dateStr === this.selectedDateStr;
+                    const isToday = dateStr === this.formatDateISO(new Date());
+
+                    const dayEl = document.createElement('div');
+                    let baseClasses = 'h-10 rounded-xl flex flex-col items-center justify-center relative cursor-pointer transition-all border text-xs ';
+                    
+                    if (isSelected) {
+                        baseClasses += 'bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-600/30 font-bold';
+                    } else if (dayOrders.length > 0) {
+                        baseClasses += 'bg-indigo-950/80 border-indigo-500/50 text-indigo-200 font-semibold';
+                    } else if (isToday) {
+                        baseClasses += 'bg-slate-800 border-blue-500/80 text-blue-400 font-bold';
+                    } else {
+                        baseClasses += 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-800';
+                    }
+
+                    dayEl.className = baseClasses;
+                    dayEl.innerHTML = `
+                        <span>${day}</span>
+                        ${dayOrders.length > 0 ? `<span class="absolute bottom-1 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-emerald-400'}"></span>` : ''}
+                    `;
+
+                    dayEl.onclick = () => {
+                        this.selectedDateStr = dateStr;
+                        this.renderCalendar();
+                        this.renderSelectedDateOrders();
+                    };
+
+                    grid.appendChild(dayEl);
+                }
+                this.updateStats();
+            }
+
+            renderSelectedDateOrders() {
+                const container = document.getElementById('selected-date-orders');
+                const titleEl = document.getElementById('selected-date-title');
+                
+                const formattedDate = new Date(this.selectedDateStr).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+                titleEl.textContent = `Заказы на ${formattedDate}`;
+
+                const dayOrders = this.orders.filter(o => o.date === this.selectedDateStr);
+
+                if (dayOrders.length === 0) {
+                    container.innerHTML = `
+                        <div class="bg-slate-800/40 border border-slate-800 rounded-2xl p-4 text-center text-slate-400 text-xs">
+                            На эту дату броней нет. Нажмите «+ Добавить на дату».
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = dayOrders.map(order => {
+                    const eqList = (order.equipment || []).map(eqData => {
+                        // Поддержка и старых (до обновления) и новых заказов с количеством
+                        const eqId = typeof eqData === 'string' ? eqData : eqData.id;
+                        const qty = typeof eqData === 'string' ? 1 : (eqData.qty || 1);
+                        const item = EQUIPMENT_CATALOG.find(e => e.id === eqId);
+                        return item ? `
+                            <div class="flex items-center justify-between bg-slate-900/80 px-2.5 py-1.5 rounded-xl border border-slate-800">
+                                <div class="flex items-center space-x-2">
+                                    <img src="${item.img}" onerror="this.onerror=null; this.src=FALLBACK_IMG" class="w-7 h-7 rounded-lg object-cover">
+                                    <span class="text-xs text-slate-200 font-medium">${item.name}</span>
+                                </div>
+                                <span class="text-[10px] font-bold bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-md border border-blue-500/30">x${qty}</span>
+                            </div>
+                        ` : '';
+                    }).join('');
+
+                    const commentHtml = order.comment ? `
+                        <div class="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 mt-3 flex items-start space-x-2">
+                            <i class="fa-solid fa-comment-dots text-amber-500/70 text-sm mt-0.5"></i>
+                            <span class="text-xs text-amber-200/90 whitespace-pre-wrap">${order.comment}</span>
+                        </div>
+                    ` : '';
+
+                    return `
+                        <div class="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-4 shadow-md">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="font-bold text-sm text-slate-100 flex items-center space-x-2">
+                                    <i class="fa-solid fa-user-circle text-blue-400"></i>
+                                    <span>${order.client}</span>
+                                </span>
+                                <span class="font-bold text-emerald-400 text-sm">${order.total.toLocaleString()} ₽</span>
+                            </div>
+                            
+                            <div class="space-y-1">
+                                <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Оборудование:</div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto">
+                                    ${eqList || '<div class="text-xs text-slate-500 italic">Оборудование не выбрано</div>'}
+                                </div>
+                            </div>
+                            
+                            ${commentHtml}
+
+                            <div class="flex justify-end space-x-2 pt-3 border-t border-slate-700/40 mt-3">
+                                <button onclick="app.editOrder('${order.id}')" class="text-xs text-blue-400 hover:underline px-2 py-1"><i class="fa-solid fa-pen mr-1"></i>Изменить</button>
+                                <button onclick="app.deleteOrder('${order.id}')" class="text-xs text-rose-400 hover:underline px-2 py-1"><i class="fa-solid fa-trash mr-1"></i>Удалить</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            renderOrdersList() {
+                const container = document.getElementById('all-orders-list');
+                const search = document.getElementById('search-input').value.toLowerCase();
+                const statusFilter = document.getElementById('filter-status').value;
+                const today = this.formatDateISO(new Date());
+
+                let filtered = this.orders.filter(o => {
+                    const matchSearch = o.client.toLowerCase().includes(search) || (o.comment && o.comment.toLowerCase().includes(search));
+                    if (!matchSearch) return false;
+                    if (statusFilter === 'upcoming') return o.date >= today;
+                    if (statusFilter === 'past') return o.date < today;
+                    return true;
+                });
+
+                filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                if (filtered.length === 0) {
+                    container.innerHTML = `<div class="bg-slate-800/40 border border-slate-800 rounded-2xl p-6 text-center text-slate-400 text-xs">Заказы не найдены</div>`;
+                    return;
+                }
+
+                container.innerHTML = filtered.map(order => {
+                    const commentHtml = order.comment ? `
+                        <div class="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 mt-2 flex items-start space-x-2">
+                            <i class="fa-solid fa-comment-dots text-amber-500/70 text-xs mt-0.5"></i>
+                            <span class="text-xs text-amber-200/90 line-clamp-2">${order.comment}</span>
+                        </div>
+                    ` : '';
+                    
+                    return `
+                    <div class="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-3.5 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold px-2 py-0.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">${order.date}</span>
+                            <span class="font-bold text-emerald-400 text-sm">${order.total.toLocaleString()} ₽</span>
+                        </div>
+                        <div class="font-bold text-sm text-slate-100">${order.client}</div>
+                        ${commentHtml}
+                        <div class="flex justify-end space-x-2 pt-1 border-t border-slate-700/40">
+                            <button onclick="app.editOrder('${order.id}')" class="text-xs text-blue-400 hover:underline px-2 py-1"><i class="fa-solid fa-pen mr-1"></i>Изменить</button>
+                            <button onclick="app.deleteOrder('${order.id}')" class="text-xs text-rose-400 hover:underline px-2 py-1"><i class="fa-solid fa-trash mr-1"></i>Удалить</button>
+                        </div>
+                    </div>
+                    `;
+                }).join('');
+            }
+
+            filterOrders() {
+                this.renderOrdersList();
+            }
+
+            // Equipment Catalog
+            renderEquipmentCatalog() {
+                const container = document.getElementById('equipment-catalog-grid');
+                document.getElementById('equipment-count').textContent = `${EQUIPMENT_CATALOG.length} позиций`;
+
+                container.innerHTML = EQUIPMENT_CATALOG.map(item => `
+                    <div class="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-3 flex flex-col items-center text-center space-y-2">
+                        <img src="${item.img}" onerror="this.onerror=null; this.src=FALLBACK_IMG" class="w-20 h-20 rounded-xl object-cover border border-slate-700">
+                        <div class="font-semibold text-xs text-slate-200 line-clamp-2">${item.name}</div>
+                    </div>
+                `).join('');
+            }
+
+            renderEquipmentCheckboxes(selectedIds = []) {
+                const container = document.getElementById('equipment-select-grid');
+                let html = '';
+                
+                // Подготовка данных о выбранном количестве
+                const eqMap = new Map();
+                selectedIds.forEach(item => {
+                    if (typeof item === 'string') eqMap.set(item, 1);
+                    else eqMap.set(item.id, item.qty);
+                });
+                
+                html += `<div class="col-span-2 text-[11px] font-bold text-blue-400 uppercase tracking-wider pt-1">Готовые пакеты</div>`;
+                html += RENTAL_PACKAGES.map(pkg => `
+                    <div onclick="app.applyPackage('${pkg.id}')" class="col-span-2 bg-gradient-to-r from-blue-950/60 to-indigo-950/60 border border-blue-500/30 hover:border-blue-500 rounded-xl p-2.5 cursor-pointer transition-all flex items-center justify-between">
+                        <div>
+                            <div class="text-xs font-bold text-slate-100"><i class="fa-solid fa-box-archive mr-1.5 text-blue-400"></i>${pkg.name}</div>
+                        </div>
+                        <span class="text-[10px] bg-blue-500/20 text-blue-300 font-semibold px-2 py-1 rounded-lg border border-blue-500/30">Выбрать</span>
+                    </div>
+                `).join('');
+
+                html += `<div class="col-span-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider pt-2">Отдельные позиции</div>`;
+
+                html += EQUIPMENT_CATALOG.map(item => {
+                    const qty = eqMap.get(item.id) || 0;
+                    const isSelected = qty > 0;
+                    return `
+                        <div class="equipment-card flex flex-col justify-center space-y-2 p-2.5 rounded-xl border border-slate-800 bg-slate-900/60 transition-all ${isSelected ? 'selected' : ''}" id="eq-card-${item.id}">
+                            <div class="flex items-center space-x-2.5">
+                                <img src="${item.img}" onerror="this.onerror=null; this.src=FALLBACK_IMG" class="w-10 h-10 rounded-lg object-cover border border-slate-800">
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-[11px] font-semibold text-slate-200 leading-tight">${item.name}</div>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between bg-slate-950/50 rounded-lg p-1 border border-slate-700/50 w-full mt-1">
+                                <button type="button" onclick="app.changeQty('${item.id}', -1)" class="w-8 h-6 rounded bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors">-</button>
+                                <input type="number" id="eq-qty-${item.id}" data-id="${item.id}" value="${qty}" readonly class="eq-qty-input w-8 text-center bg-transparent text-xs font-bold text-white focus:outline-none select-none pointer-events-none">
+                                <button type="button" onclick="app.changeQty('${item.id}', 1)" class="w-8 h-6 rounded bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors">+</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                container.innerHTML = html;
+            }
+
+            applyPackage(pkgId) {
+                // Сначала сбрасываем всё
+                document.querySelectorAll('.eq-qty-input').forEach(inp => {
+                    inp.value = 0;
+                    document.getElementById(`eq-card-${inp.dataset.id}`).classList.remove('selected');
+                });
+                
+                // Применяем количества из пакета
+                const pkg = RENTAL_PACKAGES.find(p => p.id === pkgId);
+                if (pkg) {
+                    pkg.items.forEach(item => {
+                        const inp = document.getElementById(`eq-qty-${item.id}`);
+                        if (inp) {
+                            inp.value = item.qty;
+                            document.getElementById(`eq-card-${item.id}`).classList.add('selected');
+                        }
+                    });
+                }
+            }
+
+            changeQty(id, delta) {
+                const inp = document.getElementById(`eq-qty-${id}`);
+                let val = parseInt(inp.value) || 0;
+                val += delta;
+                if (val < 0) val = 0;
+                inp.value = val;
+                
+                const card = document.getElementById(`eq-card-${id}`);
+                if (val > 0) card.classList.add('selected');
+                else card.classList.remove('selected');
+            }
+
+            onEquipmentChange(checkbox) {
+                const card = checkbox.closest('label');
+                if (checkbox.checked) card.classList.add('selected');
+                else card.classList.remove('selected');
+            }
+
+            openNewOrderModal() {
+                document.getElementById('order-id').value = '';
+                document.getElementById('order-date').value = this.selectedDateStr;
+                document.getElementById('order-client').value = '';
+                document.getElementById('order-total').value = '';
+                document.getElementById('order-comment').value = '';
+                this.renderEquipmentCheckboxes([]);
+                document.getElementById('order-modal').classList.remove('hidden');
+                document.getElementById('order-modal').classList.add('flex');
+            }
+
+            openNewOrderModalWithDate() { this.openNewOrderModal(); }
+
+            editOrder(id) {
+                const order = this.orders.find(o => o.id === id);
+                if (!order) return;
+                document.getElementById('order-id').value = order.id;
+                document.getElementById('order-date').value = order.date;
+                document.getElementById('order-client').value = order.client;
+                document.getElementById('order-total').value = order.total;
+                document.getElementById('order-comment').value = order.comment || '';
+                this.renderEquipmentCheckboxes(order.equipment || []);
+                document.getElementById('order-modal').classList.remove('hidden');
+                document.getElementById('order-modal').classList.add('flex');
+            }
+
+            closeModal() {
+                document.getElementById('order-modal').classList.add('hidden');
+                document.getElementById('order-modal').classList.remove('flex');
+            }
+
+            saveOrder(e) {
+                e.preventDefault();
+                const id = document.getElementById('order-id').value;
+                const date = document.getElementById('order-date').value;
+                const client = document.getElementById('order-client').value;
+                const total = parseFloat(document.getElementById('order-total').value) || 0;
+                const comment = document.getElementById('order-comment').value || '';
+                
+                const selectedEq = [];
+                document.querySelectorAll('.eq-qty-input').forEach(inp => {
+                    const qty = parseInt(inp.value) || 0;
+                    if (qty > 0) {
+                        selectedEq.push({ id: inp.dataset.id, qty: qty });
+                    }
+                });
+
+                if (id) {
+                    const index = this.orders.findIndex(o => o.id === id);
+                    if (index !== -1) this.orders[index] = { id, date, client, equipment: selectedEq, delivery: 0, total, comment };
+                } else {
+                    this.orders.push({ id: 'ord_' + Date.now(), date, client, equipment: selectedEq, delivery: 0, total, comment });
+                }
+
+                localStorage.setItem('sound_light_orders', JSON.stringify(this.orders));
+                this.closeModal();
+                this.init();
+                this.showToast('Заказ сохранен!');
+            }
+
+            deleteOrder(id) {
+                if (confirm('Удалить заказ?')) {
+                    this.orders = this.orders.filter(o => o.id !== id);
+                    localStorage.setItem('sound_light_orders', JSON.stringify(this.orders));
+                    this.init();
+                }
+            }
+
+            updateStats() {
+                const currentMonthStr = `${this.currentDate.getFullYear()}-${String(this.currentDate.getMonth() + 1).padStart(2, '0')}`;
+                const monthOrders = this.orders.filter(o => o.date.startsWith(currentMonthStr));
+                document.getElementById('stat-month-count').textContent = monthOrders.length;
+                const sum = monthOrders.reduce((acc, curr) => acc + curr.total, 0);
+                document.getElementById('stat-month-sum').textContent = sum.toLocaleString() + ' ₽';
+            }
+
+            showToast(text) {
+                const toast = document.getElementById('toast');
+                document.getElementById('toast-text').textContent = text;
+                toast.classList.remove('opacity-0', 'pointer-events-none');
+                setTimeout(() => toast.classList.add('opacity-0', 'pointer-events-none'), 2500);
+            }
+        }
+
+        const app = new RentalApp();
+        try {
+            const tg = window.Telegram.WebApp;
+            tg.ready(); tg.expand();
+            if (tg.themeParams.bg_color) {
+                document.body.style.backgroundColor = 'var(--tg-theme-bg-color)';
+                document.body.style.color = 'var(--tg-theme-text-color)';
+            }
+        } catch (e) {}
+    </script>
+</body>
+</html>
