@@ -335,7 +335,17 @@
                 try {
                     this.showToast('Синхронизация...', true);
                     const response = await fetch(GOOGLE_APP_URL);
-                    this.orders = await response.json();
+                    const rawOrders = await response.json();
+                    
+                    // Гугл Таблицы добавляют время к датам (например, T21:00:00.000Z).
+                    // Возвращаем их в наш строгий формат YYYY-MM-DD
+                    this.orders = rawOrders.map(o => {
+                        if (o.date && o.date.includes('T')) {
+                            const dateObj = new Date(o.date);
+                            o.date = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+                        }
+                        return o;
+                    });
                     
                     // Делаем резервную копию в телефон на всякий случай
                     localStorage.setItem('sound_light_orders', JSON.stringify(this.orders));
