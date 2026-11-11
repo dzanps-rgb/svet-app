@@ -262,6 +262,9 @@
 
     <!-- Application Script -->
     <script>
+        // ВСТАВЬ СЮДА ССЫЛКУ НА СВОЙ GOOGLE SCRIPT МЕЖДУ КАВЫЧКАМИ
+        const GOOGLE_APP_URL = "https://script.google.com/macros/s/AKfycbxguBwZxnvjFCEyS3TQeGulFweySgm4rPhjyD-p7JXJQ-3I6l0gMrsURRp9UcGsTli-/exec";
+
         // Ссылка на красивую заглушку, если картинки еще не добавлены
         const FALLBACK_IMG = "https://placehold.co/150x150/1e293b/3b82f6?text=Фото+в+папку";
 
@@ -304,21 +307,45 @@
 
         class RentalApp {
             constructor() {
-                this.orders = JSON.parse(localStorage.getItem('sound_light_orders')) || [];
+                this.orders = []; // Данные теперь скачиваем из облака
                 this.currentDate = new Date();
                 this.selectedDateStr = this.formatDateISO(new Date());
                 this.activeTab = 'calendar';
                 this.init();
             }
 
-            init() {
+            async init() {
                 this.updateHeaderDate();
-                this.renderCalendar();
+                this.renderCalendar(); // Показываем сетку пока грузится
+                await this.fetchOrdersFromGoogle();
                 this.renderSelectedDateOrders();
                 this.renderOrdersList();
                 this.renderEquipmentCatalog();
                 this.renderEquipmentCheckboxes();
                 this.updateStats();
+            }
+
+            async fetchOrdersFromGoogle() {
+                if (GOOGLE_APP_URL === "ТВОЯ_ССЫЛКА_ИЗ_ГУГЛ_СКРИПТОВ") {
+                    // Если Гугл еще не подключен, берем из памяти телефона
+                    this.orders = JSON.parse(localStorage.getItem('sound_light_orders')) || [];
+                    return;
+                }
+                
+                try {
+                    this.showToast('Синхронизация...', true);
+                    const response = await fetch(GOOGLE_APP_URL);
+                    this.orders = await response.json();
+                    
+                    // Делаем резервную копию в телефон на всякий случай
+                    localStorage.setItem('sound_light_orders', JSON.stringify(this.orders));
+                    
+                    document.getElementById('toast').classList.add('opacity-0', 'pointer-events-none');
+                } catch (e) {
+                    console.error('Ошибка загрузки:', e);
+                    this.showToast('Нет сети. Показана локальная копия.');
+                    this.orders = JSON.parse(localStorage.getItem('sound_light_orders')) || [];
+                }
             }
 
             formatDateISO(date) {
@@ -667,7 +694,7 @@
                 document.getElementById('order-modal').classList.remove('flex');
             }
 
-            saveOrder(e) {
+            async saveOrder(e) {
                 e.preventDefault();
                 const id = document.getElementById('order-id').value;
                 const date = document.getElementById('order-date').value;
@@ -683,24 +710,71 @@
                     }
                 });
 
+                const orderData = {
+                    id: id || ('ord_' + Date.now()),
+                    date, client, equipment: selectedEq, delivery: 0, total, comment
+                };
+
+                // Оптимистично сохраняем в интерфейс моментально
                 if (id) {
                     const index = this.orders.findIndex(o => o.id === id);
-                    if (index !== -1) this.orders[index] = { id, date, client, equipment: selectedEq, delivery: 0, total, comment };
+                    if (index !== -1) this.orders[index] = orderData;
                 } else {
-                    this.orders.push({ id: 'ord_' + Date.now(), date, client, equipment: selectedEq, delivery: 0, total, comment });
+                    this.orders.push(orderData);
                 }
 
-                localStorage.setItem('sound_light_orders', JSON.stringify(this.orders));
                 this.closeModal();
-                this.init();
-                this.showToast('Заказ сохранен!');
+                this.renderCalendar();
+                this.renderSelectedDateOrders();
+                this.renderOrdersList();
+                this.updateStats();
+
+                if (GOOGLE_APP_URL === "ТВОЯ_ССЫЛКА_ИЗ_ГУГЛ_СКРИПТОВ") {
+                    localStorage.setItem('sound_light_orders', JSON.stringify(this.orders));
+                    this.showToast('Сохранено в телефоне!');
+                    return;
+                }
+
+                // Отправляем данные в Гугл Таблицу в фоне
+                this.showToast('Сохранение в облако...', true);
+                try {
+                    await fetch(GOOGLE_APP_URL + '?action=save', {
+                        method: 'POST',
+                        body: JSON.stringify(orderData),
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' } // Обход CORS
+                    });
+                    this.showToast('Успешно сохранено!');
+                } catch (e) {
+                    console.error('Ошибка сохранения:', e);
+                    this.showToast('Ошибка сети. Сохранено локально.');
+                    localStorage.setItem('sound_light_orders', JSON.stringify(this.orders));
+                }
             }
 
-            deleteOrder(id) {
+            async deleteOrder(id) {
                 if (confirm('Удалить заказ?')) {
                     this.orders = this.orders.filter(o => o.id !== id);
-                    localStorage.setItem('sound_light_orders', JSON.stringify(this.orders));
-                    this.init();
+                    this.renderCalendar();
+                    this.renderSelectedDateOrders();
+                    this.renderOrdersList();
+                    this.updateStats();
+
+                    if (GOOGLE_APP_URL === "ТВОЯ_ССЫЛКА_ИЗ_ГУГЛ_СКРИПТОВ") {
+                        localStorage.setItem('sound_light_orders', JSON.stringify(this.orders));
+                        return;
+                    }
+
+                    this.showToast('Удаление из облака...', true);
+                    try {
+                        await fetch(GOOGLE_APP_URL + '?action=delete&id=' + id, {
+                            method: 'POST',
+                            body: '',
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                        });
+                        this.showToast('Удалено!');
+                    } catch (e) {
+                        this.showToast('Ошибка. Удалено только локально.');
+                    }
                 }
             }
 
@@ -712,11 +786,16 @@
                 document.getElementById('stat-month-sum').textContent = sum.toLocaleString() + ' ₽';
             }
 
-            showToast(text) {
+            showToast(text, isSticky = false) {
                 const toast = document.getElementById('toast');
                 document.getElementById('toast-text').textContent = text;
                 toast.classList.remove('opacity-0', 'pointer-events-none');
-                setTimeout(() => toast.classList.add('opacity-0', 'pointer-events-none'), 2500);
+                
+                if (this.toastTimeout) clearTimeout(this.toastTimeout);
+                
+                if (!isSticky) {
+                    this.toastTimeout = setTimeout(() => toast.classList.add('opacity-0', 'pointer-events-none'), 2500);
+                }
             }
         }
 
